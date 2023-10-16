@@ -40,6 +40,8 @@
 			<groupId>com.comino</groupId>
 			<artifactId>mavutils</artifactId>
 			<version>0.0.1</version>
+			<scope>system</scope>
+			<systemPath>${basedir}/lib/mavutils-0.0.1.jar</systemPath>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.commons</groupId>
