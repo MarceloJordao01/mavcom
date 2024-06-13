@@ -43,7 +43,6 @@ import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.net.SocketOption;
 import java.net.StandardSocketOptions;
-import java.net.UnknownHostException;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
@@ -71,7 +70,7 @@ public class MAVUdpProxyNIO2 implements IMAVLinkListener, IMAVProxy {
 
 	private static final int BROADCAST_PORT = 4445;
 
-	private static final int BUFFER_SIZE = 512;
+	private static final int BUFFER_SIZE = 16;
 
 	private static final int WAITING = 0;
 	private static final int RUNNING = 1;
@@ -96,6 +95,7 @@ public class MAVUdpProxyNIO2 implements IMAVLinkListener, IMAVProxy {
 	private long transfer_speed = 0;
 
 	private DataModel model;
+	
 
 	public MAVUdpProxyNIO2(DataModel model, String peerAddress, int pPort, String bindAddress, int bPort,
 			IMAVComm comm) {
@@ -110,7 +110,7 @@ public class MAVUdpProxyNIO2 implements IMAVLinkListener, IMAVProxy {
 
 		reader = new MAVLinkReader(1);
 
-		this.comm = comm;
+		this.comm  = comm;
 		this.model = model;
 
 		listeners = new HashMap<Class<?>, List<IMAVLinkListener>>();
@@ -290,7 +290,6 @@ public class MAVUdpProxyNIO2 implements IMAVLinkListener, IMAVProxy {
 		byte[] buf = new byte[5];
 		socket = new DatagramSocket(port);
 		DatagramPacket packet = new DatagramPacket(buf, buf.length);
-		System.out.println("Waiting for remote broadcast...");
 		socket.receive(packet);
 		System.out.println("Remote broadcast received. Binding..");
 		InetAddress address = packet.getAddress();
@@ -310,6 +309,10 @@ public class MAVUdpProxyNIO2 implements IMAVLinkListener, IMAVProxy {
 		Iterator<?> selectedKeys = null;
 		long bcount = 0;
 		long start;
+		
+		byte[] forewardBuffer = new byte[300];
+		int    forewardCount  = 0;
+		byte c;
 
 		@Override
 		public void run() {
@@ -421,8 +424,10 @@ public class MAVUdpProxyNIO2 implements IMAVLinkListener, IMAVProxy {
 									if (rxBuffer.position() > 0) {
 										((Buffer) rxBuffer).flip();
 										while (rxBuffer.hasRemaining()) {
+											c = rxBuffer.get();
+											forewardBuffer[forewardCount++] = c;
 											bcount++;
-											reader.put(rxBuffer.get());
+											reader.put(c);
 										}
 										rxBuffer.compact();
 										while ((msg = reader.getNextMessage()) != null) {
@@ -432,8 +437,10 @@ public class MAVUdpProxyNIO2 implements IMAVLinkListener, IMAVProxy {
 													listener.received(msg);
 											}
 											
-											if (comm.isConnected())
-												comm.write(msg);
+											if (comm.isConnected()) {
+												comm.foreward(forewardBuffer, forewardCount);
+											}
+											forewardCount = 0;
 										}
 
 										if ((System.currentTimeMillis() - start) > 500) {
